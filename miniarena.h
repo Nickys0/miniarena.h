@@ -106,7 +106,6 @@ void ma_clear(mini_arena*); // Sets all Arena chunks.len to 0
 //////////////////////////////////////////////////////
 // Basic example
 #if 0
-
 #define MA_IMPLEMENTATION
 #include "miniarena.h"
 #include <stdio.h>
@@ -127,7 +126,6 @@ int main(void) {
     ma_free(&arena);
     return 0;
 }
-
 #endif
 
 #endif
@@ -284,3 +282,22 @@ void ma_clear(mini_arena* a) {
 }
 
 #endif
+
+/*
+    Revision history:
+
+    0.1.0 [2026-10-26] First minor release
+
+    We are following https://semver.org/ so the version has a format MAJOR.MINOR.PATCH:
+      - Modifying comments does not update the version.
+      - PATCH is incremented in case of a bug fix or refactoring without touching the API.
+      - MINOR is incremented when new functions and/or types are added in a way that does
+        not break any existing user code. We want to do this in the majority of the situation.
+        If we want to delete a certain function or type in favor of another one we should
+        just add the new function/type and deprecate the old one in a backward compatible way
+        and let them co-exist for a while.
+      - MAJOR update should be just a periodic cleanup of the DEPRECATED functions and types
+        without really modifying any existing functionality.
+      - Breaking backward compatibility in a MINOR release should be considered a bug and
+        should be promptly fixed in the next PATCH release.
+*/
