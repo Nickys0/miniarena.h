@@ -1,5 +1,5 @@
 /*
-    miniarena - v0.1.0 - MIT
+    miniarena - v0.1.1-dev - MIT
 
     MINIARENA LIBRARY (STB-STYLE)
 
@@ -51,13 +51,13 @@
 #ifndef _MINI_ARENA_H
 #define _MINI_ARENA_H
 
+#include <stdalign.h>   // alignof
 #include <stdint.h>
-#include <stdalign.h>
 #include <stdlib.h>
+#include <assert.h>     // assert and static_assert
 
 #if !defined(MA_ASSERT)
-#include <assert.h>
-#define MA_ASSERT(expr) assert((expr))
+    #define MA_ASSERT(expr) assert((expr))
 #endif
 
 #if !defined(MA_MALLOC) && !defined(MA_FREE) && !defined(MA_REALLOC)
@@ -286,7 +286,9 @@ void ma_clear(mini_arena* a) {
 /*
     Revision history:
 
-    0.1.0 [2026-10-26] First minor release
+    0.1.1-dev   [2026-11-11] (+) including assert.h for static_assert
+                             (+) minor changes
+    0.1.0       [2026-10-26] First minor release
 
     We are following https://semver.org/ so the version has a format MAJOR.MINOR.PATCH:
       - Modifying comments does not update the version.
