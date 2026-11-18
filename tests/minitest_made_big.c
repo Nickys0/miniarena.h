@@ -44,13 +44,12 @@ int main(void) {
     fprintf(stderr, "\n");
 
     { // printing Arena info
-
         fprintf(stderr, "ARENA INFO\n");
         fprintf(stderr, "|  \\_ count: %zu\n", arena.count);
 
         for(size_t i = 0; i < arena.count; ++i) {
             fprintf(stderr, "|  \\_ CHUNK[%zu]:\n", i);
-            fprintf(stderr, "|  |   \\_ size: %zu\n", arena.chunks[i]->size);
+            fprintf(stderr, "|  |   \\_ size: %zuKib\n", arena.chunks[i]->size/1024);
             fprintf(stderr, "|  |   \\_ len:  %zu\n", arena.chunks[i]->len);
             fprintf(stderr, "|  |   \\_ data: %p\n",  arena.chunks[i]->data);
         }

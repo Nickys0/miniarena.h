@@ -1,5 +1,11 @@
 # miniarena.h - A simple Arena allocator in C
 
+
+> [!WARNING]
+> UNTIL RELEASE 1.0.0 WE DO NOT GARANTEE BACKWARD COMPATABILITY AS THIS ARE STILL 
+> UNSTABLE API
+
+
 ## Basic example
 ```c
 #define MA_IMPLEMENTATION

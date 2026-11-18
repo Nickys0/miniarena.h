@@ -1,5 +1,5 @@
 /*
-    miniarena - v0.1.1-dev - MIT
+    miniarena - v0.1.1 - MIT
 
     MINIARENA LIBRARY (STB-STYLE)
 
@@ -47,7 +47,6 @@
    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-
 #ifndef _MINI_ARENA_H
 #define _MINI_ARENA_H
 
@@ -70,20 +69,20 @@
 #define MA_DEFAULT_CHUNK_SIZE  (4*1024*1024) // 4MiB
 
 // @NOTE: According to the ISO C standard (C11 §7.19/2):
-//   max_align_t is an object type whose alignment is the greatest fundamental alignment.
-// This is the same alignment that malloc uses.
+//        max_align_t is an object type whose alignment is the greatest 
+//        fundamental alignment.
 #define MA_ALIGNMENT           alignof(max_align_t)
 
 // Once allocated a chunk must not be realloc'd only free'd
 typedef struct arena_chunk {
-    size_t    size;
-    size_t    len;
+    size_t    size;     // Number of bytes that can hold
+    size_t    len;      // Number of bytes allocated
     uintptr_t data[];
 } ma_chunk;
 
 typedef struct mini_arena {
     ma_chunk** chunks;
-    size_t     count;
+    size_t     count;   // Number of chunks allocated
 } mini_arena;
 
 // Creating the Arena
@@ -95,7 +94,7 @@ mini_arena* ma_expand(mini_arena*); // Creates a new chunk with size MA_DEFAULT_
 mini_arena* ma_expand_with_size(mini_arena*, size_t nbytes); // Creates a new chunk with size <nbytes> 
 mini_arena* ma_expand_n_with_size(mini_arena*, size_t count, size_t nbytes); // Creates a n chunks with size <nbytes> 
 
-// Allocating in the arena (NULL to indicate an Error)
+// Allocating in the arena (may return NULL)
 void* ma_alloc(mini_arena*, size_t nbytes); // aligned based on MA_ALIGNMENT
 void* ma_realloc(mini_arena*, void* old, size_t old_size, size_t new_nbytes); // aligned based on MA_ALIGNMENT
 
@@ -126,9 +125,8 @@ int main(void) {
     ma_free(&arena);
     return 0;
 }
-#endif
-
-#endif
+#endif // Basic example
+#endif // !_MINI_ARENA_H
 
 /**
  * @brief MINIARENA Implementation section
@@ -149,6 +147,39 @@ static ma_chunk* ma__new_chunk(size_t chunk_size) {
     chunk->len =  0;
 
     return chunk;
+}
+
+// Searches through the chunks to find a slot who has at least <req_size>
+static uintptr_t ma__get_available_space(mini_arena* a, size_t req_size) {
+    uintptr_t address = 0x0;
+
+    // @NOTE: becouse we do not set an header (like malloc does) we can't actually
+    //        set the req_size to a power of 2 becouse otherwise a lot of bytes will
+    //        go wasted
+
+    for(size_t i = 0; i < a->count; ++i) {
+        ma_chunk* chunk = a->chunks[i];
+        MA_ASSERT(chunk->size >= chunk->len); // if it fails is to be considered a bug
+
+        if((chunk->size - chunk->len) < req_size) /* not enough space */ {
+            continue;
+        }
+
+        const size_t __lower_bits =             MA_ALIGNMENT-1;
+        const uintptr_t __next_available_byte = (uintptr_t)&chunk->data[chunk->len];
+
+        // A bit of weird pointer logic
+        const uintptr_t aligned =   (__next_available_byte + __lower_bits) & ~__lower_bits;
+        const uintptr_t last_byte = (uintptr_t)&chunk->data[chunk->size];
+
+        if((last_byte - aligned) > req_size) /* it has enough space */ {
+            address = aligned;
+            chunk->len += ((aligned - __next_available_byte) + req_size);
+            break;
+        }
+    }
+
+    return address;
 }
 
 mini_arena ma_new( ) {
@@ -203,55 +234,35 @@ void* ma_alloc(mini_arena* a, size_t nbytes) {
         return NULL;
     }
 
-    int retry = 0;
     uintptr_t address = 0x0;
 
-retry:
-    for(size_t i = 0; i < a->count; ++i) {
-        ma_chunk* chunk = a->chunks[i];
+    // We search the first available slot with enough space
+    // (address is already aligned)
+    address = ma__get_available_space(a, nbytes);
+    if(address == 0x0) /* no available space was found */ {
 
-        // A bit of weird pointer logic
-        // How it works:
-        // alignment - 1: mask of lower bits. For an 8-byte alignment: (0x7: 0b0111).
-        // + (alignment - 1): Pushes any unaligned value across the boundary into the next multiple 
-        // & ~(alignment - 1): Clears the lower bits, snapping down to the start of the aligned block.
-        // becouse of how it works MA_ALIGNMENT must be a power of 2
-        uintptr_t aligned = (((uintptr_t)&chunk->data[chunk->len]) + (MA_ALIGNMENT - 1)) & 
-                                    ~(uintptr_t)(MA_ALIGNMENT - 1);
-
-        uintptr_t last_byte = (uintptr_t)&chunk->data[chunk->size];
-
-        if((last_byte - aligned) > nbytes) {
-            address = (uintptr_t)&chunk->data[chunk->len];
-            chunk->len += ((address - (uintptr_t)&chunk->data[chunk->len]) + nbytes);
-            break;
-        }
-    }
-
-    if(address == 0x0) {
-        // To have a little bit of space we try to allocate double the required sized 
-        // if it doesn't exceed 64MiB of memory otherwise we add a little padding of 1KiB
-        const size_t cs = nbytes * 2 <= (64*1024*1024)? nbytes * 2: nbytes + (1*1024);
+        // beocuse no available slot was found we create a new chunk with enough
+        // space to hold at least nbytes
+        const size_t cs = nbytes <= MA_DEFAULT_CHUNK_SIZE? MA_DEFAULT_CHUNK_SIZE
+                                    :nbytes * 2;
         void* d = ma_expand_with_size(a, cs);
-        
-        // We can't directly use the function inside the assert becouse if it was "disable" 
-        // the function wouldn't be called anymore
+
+        // We can't directly use the function inside the assert becouse if it was 
+        // "disable" the function wouldn't be called anymore
         MA_ASSERT(d != NULL);
 
-        if(retry == 0) {
-            goto retry;
-        } /* else return NULL */
+        address = ma__get_available_space(a, nbytes);
     }
 
     return (void*)address;
 }
 
-void* ma_realloc(mini_arena* a, void* old, size_t old_size, size_t new_nbytes){
-    if(a == NULL || old == NULL || new_nbytes <= old_size) {
+void* ma_realloc(mini_arena* a, void* old, size_t old_size, size_t req_size){
+    if(a == NULL || old == NULL || req_size <= old_size) {
         return old;
     }
 
-    void* mem = ma_alloc(a, new_nbytes); // ??
+    void* mem = ma_alloc(a, req_size);
     if(mem == NULL) {
         return NULL;
     }
@@ -282,13 +293,16 @@ void ma_clear(mini_arena* a) {
 }
 
 #endif
-
 /*
     Revision history:
 
-    0.1.1-dev   [2026-11-11] (+) including assert.h for static_assert
-                             (+) minor changes
-    0.1.0       [2026-10-26] First minor release
+ !  IMPORTANT: UNTIL RELEASE 1.0.0 WE DO NOT GARANTEE BACKWARD COMPATABILITY
+    AS THIS ARE STILL AN UNSTABLE API
+
+    0.1.1   [2026-11-18] Some internal fixes
+                         including assert.h for static_assert
+
+    0.1.0   [2026-10-26] First minor release
 
     We are following https://semver.org/ so the version has a format MAJOR.MINOR.PATCH:
       - Modifying comments does not update the version.
@@ -300,6 +314,7 @@ void ma_clear(mini_arena* a) {
         and let them co-exist for a while.
       - MAJOR update should be just a periodic cleanup of the DEPRECATED functions and types
         without really modifying any existing functionality.
+
       - Breaking backward compatibility in a MINOR release should be considered a bug and
         should be promptly fixed in the next PATCH release.
 */

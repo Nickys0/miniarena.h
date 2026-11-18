@@ -30,6 +30,8 @@ int main(void) {
     int* array = NULL;
     uintptr_t start_address = 0x0;
 
+    const size_t __alignment_lower_bits = MA_ALIGNMENT-1;
+
     { // testing alloc
         fprintf(stderr, "TESTING: ma_alloc(a: %p, nbytes: %zu)\n", &arena, array_size);
 
@@ -37,12 +39,16 @@ int main(void) {
         assert(array != NULL);
         start_address = (uintptr_t)&array[0];
 
+        // It is not alligned correctly
+        assert((start_address & __alignment_lower_bits) == 0);
+
         for(size_t i = 0; i < (array_len); ++i) {
            array[i] = i + 1; 
         }
     
+        fprintf(stderr, "(0x%lx) start address\n", start_address);
         for(size_t i = 0; i < (array_len); ++i) {
-            fprintf(stderr, "(0x%lx) [%02zu]: %d\n", (uintptr_t)&array[i], i, array[i]);
+            fprintf(stderr, "(+0x%04lx) [%02zu]: %d\n", (uintptr_t)&array[i]-start_address, i, array[i]);
         }
     }
 
@@ -57,15 +63,22 @@ int main(void) {
         assert(array != NULL);
         if((uintptr_t)&array[0] == start_address) {
             fprintf(stderr, "ma_realloc failed as it ended up returning the same pointer!\n");
+            fprintf(stderr, "  note: this cannot happen as a bigger size was required\n");
             abort();
         }
+
+        start_address = (uintptr_t)&array[0];
+
+        // It is not alligned correctly
+        assert((start_address & __alignment_lower_bits) == 0);
 
         for(size_t i = 0; i < array_len; ++i) {
            array[array_len + i] = (array_size/sizeof(array[0])) + i + 1; 
         }
 
-        for(size_t i = 0; i < array_len*2; ++i) {
-            fprintf(stderr, "(0x%lx) [%02zu]: %d\n", (uintptr_t)&array[i], i, array[i]);
+        fprintf(stderr, "(0x%lx) start address\n", start_address);
+        for(size_t i = 0; i < (array_len); ++i) {
+            fprintf(stderr, "(+0x%04lx) [%02zu]: %d\n", (uintptr_t)&array[i]-start_address, i, array[i]);
         }
     }
 
@@ -79,9 +92,9 @@ int main(void) {
 
         for(size_t i = 0; i < arena.count; ++i) {
             fprintf(stderr, "|- CHUNK[%zu]:\n", i);
-            fprintf(stderr, "|    \\_ size: %zu\n", arena.chunks[i]->size);
-            fprintf(stderr, "|    \\_ len:  %zu\n", arena.chunks[i]->len);
-            fprintf(stderr, "|    \\_ data: %p\n",  arena.chunks[i]->data);
+            fprintf(stderr, "|    \\_ size: %zuKib\n",  arena.chunks[i]->size/1024);
+            fprintf(stderr, "|    \\_ len:  %zu\n",     arena.chunks[i]->len);
+            fprintf(stderr, "|    \\_ data: %p\n",      arena.chunks[i]->data);
         }
     }
 
